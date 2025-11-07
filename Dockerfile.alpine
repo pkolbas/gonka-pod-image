@@ -1,28 +1,25 @@
-FROM alpine:3.20
+FROM ubuntu:24.04
 
 # Install required packages, including OpenSSH server
-RUN apk add --no-cache bash nginx nano wget tar ca-certificates shadow openssh && \
-    mkdir -p /run/nginx
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        nginx nano wget tar ca-certificates openssh-server && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /run/nginx /run/sshd
 
 # Prepare SSH server (create user and host keys)
-RUN adduser -D -s /bin/bash frpuser && echo "frpuser:changeme" | chpasswd && \
+RUN useradd -m -s /bin/bash frpuser && echo "frpuser:changeme" | chpasswd && \
     ssh-keygen -A
 
 # Configure nginx
 COPY nginx-single.conf /etc/nginx/nginx.conf
 
-# Prepare directories used by start script
-RUN mkdir -p /etc/wireguard && \
-    chmod 700 /etc/wireguard && \
-    mkdir -p /data/wireguard-configs
-
 # Copy start script
 COPY start.sh /start.sh
-COPY alpine-start.sh /alpine-start.sh
 RUN chmod +x /start.sh
-RUN chmod +x /alpine-start.sh
 
 EXPOSE 22
 
-ENTRYPOINT ["/alpine-start.sh"]
+ENTRYPOINT ["/start.sh"]
 

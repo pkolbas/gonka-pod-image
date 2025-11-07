@@ -9,10 +9,6 @@ RUN apt update && \
 # Configure nginx (single container version)
 COPY nginx-single.conf /etc/nginx/nginx.conf
 
-# Set up wireguard directories
-RUN chmod 700 /etc/wireguard && \
-    mkdir -p /data/wireguard-configs
-
 # Copy start script
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
