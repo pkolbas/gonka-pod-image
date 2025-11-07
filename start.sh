@@ -89,6 +89,7 @@ if [ "${UBUNTU_TEST}" = "true" ]; then
     wait -n
 else
     echo "Starting uvicorn application..."
+    source /app/packages/api/.venv/bin/activate
     exec uvicorn api.app:app --host=0.0.0.0 --port=8080
 fi
 
