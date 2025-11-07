@@ -5,10 +5,21 @@ on:
     branches: [ main, dev-* ]
     paths:
       - 'Dockerfile'
+      - 'Dockerfile.alpine'
       - 'start.sh'
       - 'nginx-single.conf'
       - '.github/workflows/build-docker.yaml'
   workflow_dispatch:
+    inputs:
+      image_target:
+        description: 'Select which Dockerfile to build (default builds both)'
+        required: false
+        type: choice
+        default: both
+        options:
+          - both
+          - mlnode
+          - alpine
 
 env:
   REGISTRY: ghcr.io
@@ -26,6 +37,27 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Determine build targets
+        id: targets
+        env:
+          SELECTION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.image_target || 'both' }}
+        run: |
+          selection="${SELECTION:-both}"
+          case "$selection" in
+            mlnode)
+              echo "build_mlnode=true" >> "$GITHUB_OUTPUT"
+              echo "build_alpine=false" >> "$GITHUB_OUTPUT"
+              ;;
+            alpine)
+              echo "build_mlnode=false" >> "$GITHUB_OUTPUT"
+              echo "build_alpine=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "build_mlnode=true" >> "$GITHUB_OUTPUT"
+              echo "build_alpine=true" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -36,8 +68,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
+      - name: Extract metadata (mlnode)
+        if: steps.targets.outputs.build_mlnode == 'true'
+        id: meta_mlnode
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
@@ -49,20 +82,56 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Extract metadata (alpine)
+        if: steps.targets.outputs.build_alpine == 'true'
+        id: meta_alpine
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          flavor: |
+            suffix=-alpine
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image (mlnode)
+        if: steps.targets.outputs.build_mlnode == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta_mlnode.outputs.tags }}
+          labels: ${{ steps.meta_mlnode.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Output image info
-        if: github.event_name != 'pull_request'
+      - name: Build and push Docker image (alpine)
+        if: steps.targets.outputs.build_alpine == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.alpine
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_alpine.outputs.tags }}
+          labels: ${{ steps.meta_alpine.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Output image info (mlnode)
+        if: github.event_name != 'pull_request' && steps.targets.outputs.build_mlnode == 'true'
         run: |
-          echo "Built and pushed image: ${{ steps.meta.outputs.tags }}"
+          echo "Built and pushed default image: ${{ steps.meta_mlnode.outputs.tags }}"
+          echo "Registry: ${{ env.REGISTRY }}"
+
+      - name: Output image info (mlnode)
+        if: github.event_name != 'pull_request' && steps.targets.outputs.build_alpine == 'true'
+        run: |
+          echo "Built and pushed alpine image: ${{ steps.meta_alpine.outputs.tags }}"
           echo "Registry: ${{ env.REGISTRY }}"

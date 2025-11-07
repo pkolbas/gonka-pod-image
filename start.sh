@@ -1,43 +1,83 @@
 #!/bin/bash
 set -e
 
-# Allow input from vpn network on ports 8081 and 5001
-ufw allow from 10.0.0.0/24 to any port 8081 proto tcp || true
-ufw allow from 10.0.0.0/24 to any port 5001 proto tcp || true
-
 # Generate wireguard keys and config if environment variables are provided
-if [ -n "$WIREGUARD_SERVER_PUBLIC_KEY" ] && [ -n "$WIREGUARD_SERVER_IP" ]; then
-    # Create directory if it doesn't exist
-    mkdir -p /data/wireguard-configs
-    
-    # Generate keys only if client_public.key doesn't exist or is empty
-    if [ ! -s /data/wireguard-configs/client_public.key ]; then
-        wg genkey | tee /data/wireguard-configs/client_private.key | wg pubkey > /data/wireguard-configs/client_public.key
-        chmod 600 /data/wireguard-configs/client_private.key
-        chmod 644 /data/wireguard-configs/client_public.key
-    fi
-    
-    # Read keys
-    CLIENT_PRIVATE_KEY=$(cat /data/wireguard-configs/client_private.key)
-    CLIENT_PUBLIC_KEY=$(cat /data/wireguard-configs/client_public.key)
-    
-    # Generate wireguard config
-    cat > /etc/wireguard/wg-client.conf <<EOF
-[Interface]
-PrivateKey = $CLIENT_PRIVATE_KEY
-Address = 10.0.0.2/24
+if [ -n "$SECRET_FRP_TOKEN" ] && [ -n "$FRP_SERVER_IP" ] && [ -n "$FRP_SERVER_PORT" ]; then
+    # Determine FRP version and archive destination
+    FRP_VERSION=${FRP_VERSION:-0.65.0}
+    FRP_DOWNLOAD_DIR=/data
+    FRP_ARCHIVE="frp_${FRP_VERSION}_linux_amd64.tar.gz"
+    FRP_ARCHIVE_PATH="${FRP_DOWNLOAD_DIR}/${FRP_ARCHIVE}"
+    FRP_EXTRACT_DIR="${FRP_DOWNLOAD_DIR}/frp_${FRP_VERSION}_linux_amd64"
 
-[Peer]
-PublicKey = $WIREGUARD_SERVER_PUBLIC_KEY
-Endpoint = $WIREGUARD_SERVER_IP:51820
-AllowedIPs = 10.0.0.0/24
-PersistentKeepalive = 25
+    mkdir -p "${FRP_DOWNLOAD_DIR}"
+
+    if [ ! -f "${FRP_ARCHIVE_PATH}" ]; then
+        FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${FRP_ARCHIVE}"
+        echo "Downloading FRP ${FRP_VERSION} from ${FRP_URL}..."
+        wget -q -O "${FRP_ARCHIVE_PATH}" "${FRP_URL}"
+
+        echo "Extracting FRP archive..."
+        tar -xzf "${FRP_ARCHIVE_PATH}" -C "${FRP_DOWNLOAD_DIR}"
+
+        if [ ! -x "${FRP_EXTRACT_DIR}/frpc" ] || [ ! -x "${FRP_EXTRACT_DIR}/frps" ]; then
+            echo "Extracted FRP archive does not contain frpc/frps binaries." >&2
+            exit 1
+        fi
+
+        echo "Installing FRP binaries to /usr/bin..."
+        install -m 0755 "${FRP_EXTRACT_DIR}/frpc" /usr/bin/frpc
+        install -m 0755 "${FRP_EXTRACT_DIR}/frps" /usr/bin/frps
+
+        echo "Preparing FRP configuration directories..."
+        mkdir -p /etc/frp
+        mkdir -p /var/frp
+    else
+        echo "FRP archive ${FRP_ARCHIVE} already present in ${FRP_DOWNLOAD_DIR}; skipping download."
+    fi
+
+    echo "Writing /etc/frp/frpc.ini..."
+    cat > /etc/frp/frpc.ini <<EOF
+[common]
+server_addr = ${FRP_SERVER_IP}
+server_port = ${FRP_SERVER_PORT}
+token = ${SECRET_FRP_TOKEN}
+
+[client-web]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 5000
+remote_port = 15000
 EOF
-    
-    chmod 600 /etc/wireguard/wg-client.conf
-    
-    # Start wireguard
-    wg-quick up wg-client || true
+
+    echo "Creating systemd unit /etc/systemd/system/frpc.service..."
+    cat > /etc/systemd/system/frpc.service <<'EOF'
+[Unit]
+Description=Frp Client Service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Restart=on-failure
+RestartSec=5s
+ExecStart=/usr/bin/frpc -c /etc/frp/frpc.ini
+ExecReload=/usr/bin/frpc reload -c /etc/frp/frpc.ini
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "Starting FRP client service via systemd..."
+        systemctl daemon-reload
+        systemctl enable frpc
+        systemctl restart frpc
+    else
+        echo "systemctl not found; starting frpc in background..."
+        /usr/bin/frpc -c /etc/frp/frpc.ini &
+    fi
 fi
 
 # Start nginx in background
