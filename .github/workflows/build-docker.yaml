@@ -8,13 +8,6 @@ on:
       - 'start.sh'
       - 'nginx-single.conf'
       - '.github/workflows/build-docker.yaml'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'Dockerfile'
-      - 'start.sh'
-      - 'nginx-single.conf'
-      - '.github/workflows/build-docker.yaml'
   workflow_dispatch:
 
 env:
