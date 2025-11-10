@@ -27,6 +27,8 @@ COPY compressa-tests/inference-up.py /data/compressa-tests/inference-up.py
 COPY compressa-tests/start-test.sh /data/compressa-tests/start-test.sh
 RUN chmod +x /data/compressa-tests/start-test.sh
 
+COPY model-weigths-download.sh /data/model-weigths-download.sh
+
 # Configure nginx (single container version)
 COPY nginx-single.conf /etc/nginx/nginx.conf
 
