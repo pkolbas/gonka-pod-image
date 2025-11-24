@@ -1,4 +1,4 @@
-FROM ghcr.io/product-science/mlnode:3.0.10
+FROM ghcr.io/product-science/mlnode:3.0.11
 
 # Install nginx, pkg-config and wireguard userspace tools (without resolvconf)
 RUN apt update && \
@@ -36,7 +36,7 @@ COPY nginx-single.conf /etc/nginx/nginx.conf
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-ENV HF_HOME=/data/hf-cache
+ENV HF_HOME=/workspace/hf_home
 
 WORKDIR /app
 

@@ -4,7 +4,7 @@ from typing import Dict, Optional
 import requests
 
 MODEL_ALIASES: Dict[str, str] = {
-    "Qwen3-235B": "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8",
+    # "Qwen3-235B": "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8",
     "Qwen3-32B": "Qwen/Qwen3-32B-FP8",
 }
 

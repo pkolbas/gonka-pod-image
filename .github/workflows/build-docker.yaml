@@ -5,20 +5,9 @@ on:
     branches: [ main, dev-* ]
     paths:
       - 'Dockerfile'
-      - 'Dockerfile.ubuntu'
       - 'start.sh'
       - 'nginx-single.conf'
       - '.github/workflows/build-docker.yaml'
-  workflow_dispatch:
-    inputs:
-      image_target:
-        description: 'Select which Dockerfile to build (default builds both)'
-        required: false
-        type: choice
-        default: ubuntu
-        options:
-          - mlnode
-          - ubuntu
 
 env:
   REGISTRY: ghcr.io
@@ -36,27 +25,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Determine build targets
-        id: targets
-        env:
-          SELECTION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.image_target || 'ubuntu' }}
-        run: |
-          selection="${SELECTION:-ubuntu}"
-          case "$selection" in
-            mlnode)
-              echo "build_mlnode=true" >> "$GITHUB_OUTPUT"
-              echo "build_ubuntu=false" >> "$GITHUB_OUTPUT"
-              ;;
-            ubuntu)
-              echo "build_mlnode=false" >> "$GITHUB_OUTPUT"
-              echo "build_ubuntu=true" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "build_mlnode=true" >> "$GITHUB_OUTPUT"
-              echo "build_ubuntu=true" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -68,7 +36,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata (mlnode)
-        if: steps.targets.outputs.build_mlnode == 'true'
         id: meta_mlnode
         uses: docker/metadata-action@v5
         with:
@@ -81,22 +48,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Extract metadata (ubuntu)
-        if: steps.targets.outputs.build_ubuntu == 'true'
-        id: meta_ubuntu
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-ubuntu
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
       - name: Build and push Docker image (mlnode)
-        if: steps.targets.outputs.build_mlnode == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -108,27 +60,8 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Build and push Docker image (ubuntu)
-        if: steps.targets.outputs.build_ubuntu == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile.ubuntu
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_ubuntu.outputs.tags }}
-          labels: ${{ steps.meta_ubuntu.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64
-
       - name: Output image info (mlnode)
-        if: github.event_name != 'pull_request' && steps.targets.outputs.build_mlnode == 'true'
+        if: github.event_name != 'pull_request'
         run: |
           echo "Built and pushed default image: ${{ steps.meta_mlnode.outputs.tags }}"
-          echo "Registry: ${{ env.REGISTRY }}"
-
-      - name: Output image info (ubuntu)
-        if: github.event_name != 'pull_request' && steps.targets.outputs.build_ubuntu == 'true'
-        run: |
-          echo "Built and pushed ubuntu image: ${{ steps.meta_ubuntu.outputs.tags }}"
           echo "Registry: ${{ env.REGISTRY }}"
