@@ -1,4 +1,4 @@
-FROM ghcr.io/product-science/mlnode:3.0.11
+FROM ghcr.io/product-science/mlnode:3.0.11-post1
 
 # Install nginx, pkg-config and wireguard userspace tools (without resolvconf)
 RUN apt update && \
