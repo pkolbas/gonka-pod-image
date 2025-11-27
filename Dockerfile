@@ -25,6 +25,7 @@ RUN mkdir -p /data/compressa-tests
 COPY compressa-tests/config.yml /data/compressa-tests/config.yml
 COPY compressa-tests/prompts.csv /data/compressa-tests/prompts.csv
 COPY compressa-tests/inference-up.py /data/compressa-tests/inference-up.py
+COPY compressa-tests/inference-stop.sh /data/compressa-tests/inference-stop.sh
 COPY compressa-tests/start-test.sh /data/compressa-tests/start-test.sh
 RUN chmod +x /data/compressa-tests/start-test.sh
 
