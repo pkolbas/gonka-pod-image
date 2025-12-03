@@ -2,19 +2,19 @@ FROM ghcr.io/product-science/mlnode:3.0.11-post1
 
 # Install nginx, pkg-config, nano, wget
 RUN apt update && \
-    apt install -y --no-install-recommends nginx nano wget pkg-config && \
+    apt install -y --no-install-recommends nginx nano wget ca-certificates pkg-config && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install FRP client (frpc)
-ARG FRP_VERSION=0.65.0
-RUN mkdir -p /tmp/frp && \
-    cd /tmp/frp && \
-    wget -q "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
-    tar -xzf "frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
-    install -m 0755 "frp_${FRP_VERSION}_linux_amd64/frpc" /usr/bin/frpc && \
-    rm -rf /tmp/frp && \
-    mkdir -p /etc/frp /var/frp
+# Install Nebula client
+ARG NEBULA_VERSION=1.9.3
+RUN mkdir -p /tmp/nebula && \
+    cd /tmp/nebula && \
+    wget -q "https://github.com/slackhq/nebula/releases/download/v${NEBULA_VERSION}/nebula-linux-amd64.tar.gz" && \
+    tar -xzf "nebula-linux-amd64.tar.gz" && \
+    mv nebula /usr/local/bin/nebula && \
+    cd / && rm -rf /tmp/nebula && \
+    mkdir -p /etc/nebula
 
 # Install compressa-perf and Python dependencies, for benchmarking
 RUN pip install --no-cache-dir pycparser \
@@ -31,17 +31,13 @@ RUN chmod +x /data/compressa-tests/start-test.sh
 
 COPY model-weigths-download.sh /data/model-weigths-download.sh
 
-# Configure nginx (single container version)
 COPY nginx-single.conf /etc/nginx/nginx.conf
 
-# Copy start script
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+COPY start-with-nebula.sh /start-with-nebula.sh
+RUN chmod +x /start-with-nebula.sh
 
 ENV HF_HOME=/workspace/hf_home
 
 WORKDIR /app
 
-# Use start script as entrypoint
-ENTRYPOINT ["/start.sh"]
-
+ENTRYPOINT ["/start-with-nebula.sh"]
