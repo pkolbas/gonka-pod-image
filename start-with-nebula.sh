@@ -27,7 +27,7 @@ for f in /etc/nebula/ca.crt /etc/nebula/host.crt /etc/nebula/host.key; do
 done
 
 NEBULA_IP="10.0.0.${CLIENT_ID_NUM}"
-NEBULA_NAME="${NEBULA_NAME:-ml-node-${CLIENT_ID_NUM}}"
+NEBULA_NAME="${NEBULA_NAME:-ml-node-${CLIENT_ID}}"
 
 echo "Writing /etc/nebula/config.yml for Nebula client..."
 cat > /etc/nebula/config.yml <<EOF
